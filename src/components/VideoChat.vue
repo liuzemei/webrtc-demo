@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue';
-import WebRTCService from '../services/WebRTCService';
+import WebRTCService from '../services/webRTC/WebRTCService';
 
 const localVideo = ref(null);
 const remoteVideos = ref([]);
@@ -17,9 +17,20 @@ const webRTC = ref(new WebRTCService());
 onMounted(() => {
   // 设置事件监听器
   webRTC.value.on('localStreamReady', stream => {
-    if (localVideo.value) {
+    if (localVideo.value && stream) {
       localVideo.value.srcObject = stream;
-      localVideo.value.play().catch(e => console.error('播放本地视频失败:', e));
+      // 确保视频元素自动播放
+      localVideo.value.autoplay = true;
+      // 确保视频元素显示
+      localVideo.value.style.display = 'block';
+      // 尝试播放视频
+      localVideo.value.play().catch(e => {
+        console.error('播放本地视频失败:', e);
+        // 如果自动播放失败，可能需要用户交互
+        if (e.name === 'NotAllowedError') {
+          console.log('需要用户交互才能播放视频');
+        }
+      });
     }
   });
 
