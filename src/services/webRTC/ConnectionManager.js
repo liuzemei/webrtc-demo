@@ -17,7 +17,7 @@ class ConnectionManager extends EventEmitter {
 
   async initializePeer() {
     return new Promise((resolve, reject) => {
-      this.peer = new Peer();
+      this.peer = new Peer(this.isHost ? 'eddbe031-dfdc-45bc-bd8a-493c21a8a112' : undefined);
 
       this.peer.on('open', id => {
         console.log('已连接到 PeerJS 服务器，ID:', id);
@@ -26,9 +26,35 @@ class ConnectionManager extends EventEmitter {
           this.roomId = id;
           this.emit('roomCreated', id);
         } else {
+          // 连接到房主
           this.connectToPeer(this.roomId);
+          // 向房主请求当前房间内的其他参与者列表
+          const conn = this.peer.connect(this.roomId);
+          conn.on('open', () => {
+            conn.send({ type: 'requestPeers' });
+          });
         }
         resolve(id);
+      });
+
+      // 处理数据连接
+      this.peer.on('connection', conn => {
+        conn.on('data', data => {
+          if (data.type === 'requestPeers') {
+            // 如果是房主，发送当前房间内的所有参与者ID
+            if (this.isHost) {
+              const peers = Array.from(this.connections.keys());
+              conn.send({ type: 'peerList', peers });
+            }
+          } else if (data.type === 'peerList') {
+            // 收到参与者列表后，与每个参与者建立连接
+            data.peers.forEach(peerId => {
+              if (peerId !== this.peer.id && !this.connections.has(peerId)) {
+                this.connectToPeer(peerId);
+              }
+            });
+          }
+        });
       });
 
       this.peer.on('call', call => {
